@@ -1,13 +1,9 @@
 import math
-import numpy
-import find_rv
-from astropy.io import ascii
-from astropy import coordinates
-from astropy import time
-from astropy import units
-#from astrolib import baryvel
 import sys
-import matplotlib.pyplot as plt
+import numpy
+from astropy.io import ascii
+import find_rv
+
 
 def deg2HMS(input):
     deg = int(input)
@@ -58,6 +54,14 @@ def clip(a,start,end):
     return numpy.asarray(out)
 
 def main(argv=None):
+    """
+    Uses find_rv to calculated a RV using NIRSPEC data.
+
+    Argument: a list, ex: ['','std_path',rv_std,rv_std_err,'obj_path',crop_usually_1,xcorr_width_optional,cutstart_optional,cutend_optional]
+
+    Returns: Figure of find_rv iterations, textfile of code results, prints calculated RV and uncertainty
+    """
+
     if argv is None:
         argv = sys.argv
         
@@ -129,7 +133,7 @@ def main(argv=None):
     rv_obj_err = numpy.sqrt(rv_meas_err**2 + rv_std_err**2)
 
     outstring1 = 'std:{1:} obj:{0:}  Order {2:>2d} rv={3:>6.3f} +/- {4:>6.3f}\n'.format(starname_obj,starname_std,order_obj,rv_obj,rv_obj_err)
-    print outstring1
+    print(outstring1)
     g.write(outstring1)
 
     g.close()

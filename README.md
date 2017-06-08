@@ -1,8 +1,8 @@
 # RV
 
-The BDNYC RV fitting code (Vivienne Baldassare 2011-2012, Adric Riedel 2012-2015)
+The BDNYC RV fitting code (Vivienne Baldassare 2011-2012, Adric Riedel 2012-2015, Victoria DiTomasso 2015-2017)
 It uses cross-correlation to determine the RV shift between the spectrum of an object, and the spectrum of a standard star.
-It takes out a third-order polynomial fit and regularizes the data, to reduce the effect of scaling and calibration-related differences between the two spectra. 
+It takes out a third-order polynomial fit and regularizes the data, to reduce the effect of scaling and calibration-related differences between the two spectra.
 It uses 1000 Monte Carlo tries with different additive scaled (to the uncertainty array) noise to remove the effects of noise on the data.
 It assumes all input data has been corrected for heliocentric/barycentric radial velocity. This must be done externally, either in the data reduction, or as part of a wrapper that prepares the data for this routine.
 It is:
@@ -13,24 +13,26 @@ It is:
  * And therefore all objects should be paired up with RV standards of a similar spectral type, so the lines and bands in both spectra are close to the same.
 FINAL NOTE: The radial velocity uncertainties output from this code only relate to the noise in the spectra. There are other sources of error (wavelength calibration errors, for instance) that affect the spectra. It is highly recommended to take a weighted mean of multiple different runs (different standards, different spectra of the target star, different orders if the spectra are from an echelle) to get the TRUE radial velocity uncertainty.
 
-#############
+
 ## Update
-#############
-find_rv_outliers.py will now run until 1000 iterations have been generated within set limits, for use with noisy spectra where some of the crossmatches are clearly unphysical outliers. This is an update to the older version that would simply remove everything outside those limits and calculate based on a smaller number of points.
 
-##################################
-How to use:
-##################################
+find_rv.py will now run until 1000 iterations have been generated within set limits, for use with noisy spectra where some of the crossmatches are clearly unphysical outliers. This is an update to the older version that would simply remove everything outside those limits and calculate based on a smaller number of points.
 
-import find_rv_outliers.py, and then run find_rv_outliers.radial_velocity with the following arguments:
 
-find_rv_outliers.radial_velocity(wavelength_object,flux_object,uncertainty_object, # spectral data on your target (uncertainty is NOT SNR)
+## How to use:
+
+
+import find_rv.py, and then run find_rv.radial_velocity with the following arguments:
+
+find_rv.radial_velocity(wavelength_object,flux_object,uncertainty_object, # spectral data on your target (uncertainty is NOT SNR)
               wavelength_standard,flux_standard,uncertainty_standard, # spectral data on a star with known RV, in the same (or at least overlapping) wavelength region
               name_obj,name_standard, # their names, for the plots (see point 2 below for details)
               rv_standard,rv_uncertainty_std, # the radial velocity of the standard, for the plots
               order, # for the plots. Should be the same for both.
               cross_correlation_width, # set to 200 for 'default', see point 3 below for what this means
               pixel_cut_flag,pixel_cut_start,pixel_cut_end) # set all to zero by default. See point 4 below for what this means
+
+#### Wrappers
 
 Generally, I have used this code with a wrapper that reads in and cleans up input data and runs it through radial_velocity().
 Two such wrappers are included in this repository as examples:
@@ -41,12 +43,24 @@ Both NIRSPEC.py and FIRE.py expect the same command-line arguments:
 > XXXXX.py standard_spectrum standard_rv standard_rv_uncertainty object_spectrum crop_flag [cross_correlation_width rv_cut_start rv_cut_end]
 The items in [] are optional. (see point 5 below for what 'crop flag' means)
 
-######################################
-How it works:
-######################################
+#### Running for multiple standards objects
+
+mass_rv.py, avg_rv.py and weighted_stddev.py are all wrappers made to make it easier to run the find_rv code for multiple standard objects. To measure the radial velocity of an object with a reliable uncertainty, it is best to measure the RV of that object against a variety of standards and then average those results (Reidel et al 2017, in prep). mass_rv.py expects a pandas dataframe saved as a tab separated CSV file as an input, and it produces a pandas DF with the various results. avg_rv.py uses weighted_stddev.py to find the weighted average of the results to give a final RV measurement with uncertainty.
+
+mass_rv inputs: filename of the object's spectum (wavelength and flux), name of the object (as a string), path to a tab separated panda dataframe saved as a csv file (with 'filename', 'std_rv', 'std_unc' columns)
+
+avg_rv inputs: path to pandas dataframe with columns 'obj_rv' and 'obj_unc'
+
+#### Visualizing results
+
+rv_results_vis.py creates plots using the output file from mass_rv. As written, rv_results_vis will produce a plot of the spectral type of the RV standard vs the resultant RV measurement using that standard. Examples of these plots are found in this repo, "New_visualization.png" and "Old_visualization.png"
+
+## How it works:
+
+
 Point 1:
 
-Main operation of find_rv_outliers.radial_velocity involves:
+Main operation of find_rv.radial_velocity involves:
 1. Constructing a new wavelength array based on the overlap between the two spectra, at 10x input resolution
 2. Interpolating both input datasets onto that wavelength array
 3. In a loop for N monte carlo tries:
@@ -69,13 +83,12 @@ The size of the region chopped out of the cross-correlation function (Step 7 abo
 
 Point 4:
 Occasionally, when the SNR of a spectrum is low, the cross-correlation function will occasionally favor a bad match - matching up some similar-but-incorrect region of the spectrum, or a spike in the noise. The most common symptom is that the output RV is in the hundreds or thousands of km/s, the output RV uncertainty is similarly enormous, and the bottom panel of the output plot (from step 12) show two spikes in the pixel shift histogram, rather than a smooth bell curve- one near zero, and one with a pixel shift of +/- thousands of pixels. The assumption is that the spike near 0 pixel shift is the actual RV, and the spike at some enormous pixel shift is some sort of off-lock, where the process was fooled into lining up the spectra in some obvious way (the top plot of the two shifted spectra should also look obviously wrong).
-If you set the last three arguments in find_rv.radial_velocity to 1,minimum_pixel_shift,maximum_pixel_shift, you can force the final gaussian fit (step 10) to ignore all values outside those boundaries, isolating just the good RVs. 
+If you set the last three arguments in find_rv.radial_velocity to 1,minimum_pixel_shift,maximum_pixel_shift, you can force the final gaussian fit (step 10) to ignore all values outside those boundaries, isolating just the good RVs.
 USE THIS OPTION SPARINGLY AND WITH CARE. If misused, you could theoretically force the output RV to be whatever you wanted.
 
-find_rv_outliers.py will force the program to keep running until 1000 points are generated within the range [minimum_pixel_shift,maximum_pixel_shift] and should produce more robust results if such a restriction is necessary.
+find_rv.py will force the program to keep running until 1000 points are generated within the range [minimum_pixel_shift,maximum_pixel_shift] and should produce more robust results if such a restriction is necessary.
 
 Point 5:
-Both NIRSPEC.py and FIRE.py use the 'crop flag' to trim outliers from a spectrum. If you set 'crop flag' to 1, any points more than 3 standard deviations from the mean of the spectrum will be removed, prior to the arrays being sent to find_rv.radial_velocity. 
+Both NIRSPEC.py and FIRE.py use the 'crop flag' to trim outliers from a spectrum. If you set 'crop flag' to 1, any points more than 3 standard deviations from the mean of the spectrum will be removed, prior to the arrays being sent to find_rv.radial_velocity.
 USE THIS OPTION WITH CARE: This could remove actual useful data from a spectrum that has deep features or lines. It's probably better to write your own more clever routine to remove outliers. Or do it by hand.
-
 
