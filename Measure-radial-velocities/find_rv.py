@@ -28,7 +28,6 @@ import os
 from os import listdir
 from os.path import isfile, join
 from array import array
-import math
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import numpy as np
@@ -88,8 +87,8 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
 
     # Creates ln standard wavelength array ---------------------------------
     # AR 2013.0423 The wavelength array only covers the overlap region.  Also, I'm folding the rebinning by 10 into this statement.
-    acoef_std = (n_pix_std*10 -1)/(math.log(wv_max) - math.log(wv_min))
-    bcoef_std = (n_pix_std*10) - (acoef_std * math.log(wv_max))
+    acoef_std = (n_pix_std*10 -1)/(np.log(wv_max) - np.log(wv_min))
+    bcoef_std = (n_pix_std*10) - (acoef_std * np.log(wv_max))
 
     arr = np.arange(n_pix_std*10)+1
     wv_ln_std = np.exp((arr - bcoef_std)/acoef_std)
