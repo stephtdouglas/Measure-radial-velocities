@@ -67,11 +67,21 @@ def lsf_rotate(deltav,vsini,epsilon=None,velgrid=None):
 
     return (e1*np.sqrt(x1) + e2*x1)/e3
 
+# Chi2 and assoc. values for optimization later
+sig = 10
+sig2 = sig**2
+def chi2(p):    #define gaussian function for fitting
+    sig2=p[2] ** 2
+    m = (np.exp(p[0]) * np.exp(-0.5 * (xcorr1 - p[1]) ** 2 / sig2)) + p[3] + p[4]*xcorr1
+    return (ycorr1 - m)
+
+
 def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_err,crosscorr_width,figurename):
 
 
     # The more random iterations, the better... but it takes longer
     n_iter = 1000
+    check_val = niter / 2
 
     # Step 1: Fix the spectra:
     # * Select only the region in which they overlap
@@ -156,8 +166,8 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
         rand_dist = np.random.normal(loc=0.0,scale=1.0,size=datalen)
         rand_dist2 = np.random.normal(loc=0.0,scale=1.0,size=datalen)
 
-        fx_temp_obj = np.asarray(fx_arr_obj + rand_dist * sig_arr_obj)
-        fx_temp_std = np.asarray(fx_arr_std + rand_dist2 * sig_arr_std)
+        fx_temp_obj = fx_arr_obj + rand_dist * sig_arr_obj
+        fx_temp_std = fx_arr_std + rand_dist2 * sig_arr_std
         mean_obj=np.mean(fx_temp_obj)
         mean_std=np.mean(fx_temp_std)
         stddev_obj=np.std(fx_temp_obj,ddof=1)
@@ -172,6 +182,7 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
         # curve fit - remove a cubic AR 2012.1113
         coeff,pcov = op.curve_fit(cubic,wv_arr_std,fx_reg_temp_obj)
         fx_reg_temp_obj = fx_reg_temp_obj - (coeff[0] + coeff[1]*wv_arr_std + coeff[2]*wv_arr_std**2 + coeff[3]*wv_arr_std**3)
+
         coeff,pcov = op.curve_fit(cubic,wv_arr_std,fx_reg_temp_std)
         fx_reg_temp_std = fx_reg_temp_std - (coeff[0] + coeff[1]*wv_arr_std + coeff[2]*wv_arr_std**2 + coeff[3]*wv_arr_std**3)
 
@@ -190,7 +201,7 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
         xcorr = np.arange(length) - length//2
         # AR 2012.1126 Select a tiny piece around the maximum to fit with a gaussian.
         xmid = np.argmax(ycorr)
-        ymax = np.max(ycorr)
+        ymax = ycorr[xmid]
         # now take just the portion of the array that matters
         xcorr_min=int(xmid-crosscorr_width)
         xcorr_max=int(xmid+crosscorr_width)
@@ -201,13 +212,9 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
 
         # suggestion from D. Hogg 12/15/12: Add extra linear feature to fit.
         # suggestion from D. Hogg 12/15/12: operate on ln(amp) so that the amplitude CANNOT be negative.
-        def chi2(p):    #define gaussian function for fitting
-            sig2=p[2] ** 2
-            m = (np.exp(p[0]) * np.exp(-0.5 * (xcorr1 - p[1]) ** 2 / sig2)) + p[3] + p[4]*xcorr1
-            return (ycorr1 - m)
+        # Have moved chi2 and associated vars to beginning of file
 
         # set up initial values for chi2
-        sig = 10
         sky = np.min(ycorr1)/1.2
         #                print ycorr1[-1],ycorr1[0],xcorr1[-1],xcorr1[0]
         sky2 = (ycorr1[-1]-ycorr1[0])/(xcorr1[-1]-xcorr1[0])
@@ -215,15 +222,15 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
         mean = xcorr[xmid]
 
         amp = np.exp(lnamp)
-        sig2 = sig**2
 
-        popt, ier = op.leastsq(chi2, [lnamp, mean, sig, sky, sky2])
+        popt, ier = op.leastsq(chi2, [lnamp, mean, sig, sky, sky2],
+                               args=[p,xcorr1])
         lnamp, mean, sig, sky, sky2 = popt
 
         amp = np.exp(lnamp)
 
-        print_num=l%np.floor(n_iter/2)        #prints data 10 times during calculation. Sort of a progress meter.
-        if print_num == 0:
+        #prints data periodically, as a progress meter.
+        if (l % check_val) == 0:
             ## Uncomment the following to make a plot every 500 fits.
             #fig = plt.figure(l)
             #ax = fig.add_subplot(111)
@@ -244,12 +251,10 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
 
         # if ier < 5:
         pix_shift[l] = mean
-        ccf_index = (np.abs(mean-xcorr)).argmin()
+        ccf_index = np.argmin(np.abs(mean-xcorr))
         ccf_peak[l] = ycorr[ccf_index]/ynormal
         # I'm calculating the vsini now because I need errors, and the vsini calculation is not linear.
         #pix_width[l] = vsinicoeff[0] + vsinicoeff[1] * sig + vsinicoeff[2] * sig**2 + vsinicoeff[3] * sig**3 + vsinicoeff[4] * sig**4
-
-
 
     # End cross correlation loop ---------------------------------
 
@@ -270,8 +275,8 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
 
 
 
-    # Turn the list of pixel shifts into a numpy array
-    pix_shift = np.asarray(pix_shift)
+    # Pix_shifts is already an array!
+    # pix_shift = np.asarray(pix_shift)
 
     # 4a. Compute the mean pixel shift (rv value) and pixel shift uncertainty (RV uncertainty).
 
@@ -358,7 +363,7 @@ def radial_velocity(wv_obj,fx_obj,sig_obj,wv_std,fx_std,sig_std,rv_std,rv_std_er
 
     figname = '%s.pdf' %(figurename)
     fig.savefig(figname, dpi = 300)
-    fig.clf()
+    # fig.clf()
     plt.close()
 
     #plt.figure(l+1)
